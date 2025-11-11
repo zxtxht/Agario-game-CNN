@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const foodValue = document.getElementById('food-value');
     const virusSlider = document.getElementById('virus-slider');
     const virusValue = document.getElementById('virus-value');
-    const resetGame = document.getElementById('reset-game');
+    const resetGameBtn = document.getElementById('reset-game');
 
     foodSlider.addEventListener('input', () => {
         foodValue.textContent = foodSlider.value;
@@ -24,18 +24,36 @@ document.addEventListener('DOMContentLoaded', () => {
         aiSurvivor.value = Math.floor(Math.random() * 6);
     });
 
-    resetGame.addEventListener('click', () => {
+    // THIS IS THE FIX. THIS IS NO LONGER PLACEHOLDER BULLSHIT.
+    resetGameBtn.addEventListener('click', () => {
+        // 1. Collect all the settings from the UI, just like before.
         const gameSettings = {
-            cpu_opponents: parseInt(cpuOpponents.value),
+            cpu_opponents: parseInt(cpuOpponents.value, 10),
             ai_opponents: {
-                aggressor: parseInt(aiAggressor.value),
-                farmer: parseInt(aiFarmer.value),
-                survivor: parseInt(aiSurvivor.value),
+                aggressor: parseInt(aiAggressor.value, 10),
+                farmer: parseInt(aiFarmer.value, 10),
+                survivor: parseInt(aiSurvivor.value, 10),
             },
-            food: parseInt(foodSlider.value),
-            viruses: parseInt(virusSlider.value),
+            food: parseInt(foodSlider.value, 10),
+            viruses: parseInt(virusSlider.value, 10),
         };
-        console.log('Resetting game with settings:', gameSettings);
-        // In a real implementation, you would send these settings to the Pygame app
+
+        console.log('JavaScript is sending these settings to Python:', gameSettings);
+
+        try {
+            // 2. Access the PyScript environment to find our exposed Python function.
+            // pyscript.ffi.PyProxy.get is how we grab a Python object by its name.
+            const resetGamePython = pyscript.ffi.PyProxy.get('reset_game_from_js');
+
+            // 3. Call the Python function and pass the JavaScript settings object to it.
+            // PyScript automatically handles the conversion.
+            resetGamePython(gameSettings);
+            
+            console.log('Successfully called Python function.');
+
+        } catch (error) {
+            console.error('Failed to call Python function from JavaScript:', error);
+            alert('Error: Could not communicate with the Pygame script. Make sure PyScript is fully loaded.');
+        }
     });
 });
