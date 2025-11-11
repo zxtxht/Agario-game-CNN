@@ -64,18 +64,20 @@
     
     <!-- PyScript Configuration -->
     <py-config>
+        # torch is GONE, onnxruntime-web is ADDED.
         packages = [
           "pygame-ce",
           "numpy",
-          "onnxruntime-web", 
-          "pillow"
+          "pillow",
+          "onnxruntime-web"
         ]
+        # We fetch the small .onnx files instead of the big .zip files
         [[fetch]]
         files = [
           "./game/main.py",
-          "./game/Phase1_Aggressor_SAC_sb3.zip",
-          "./game/Phase1_Farmer_SAC_sb3.zip",
-          "./game/Phase1_Survivor_SAC_sb3.zip"
+          "./game/aggressor.onnx",
+          "./game/farmer.onnx",
+          "./game/survivor.onnx"
         ]
     </py-config>
 
