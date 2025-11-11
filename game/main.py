@@ -499,13 +499,15 @@ class Game:
             self.virus_list.append(Virus(random.randint(100, cfg.SCREEN_WIDTH-100), random.randint(100, cfg.SCREEN_HEIGHT-100)))
         
         self.player = PlayerController("Player", cfg.PLAYER_COLOR, cfg.PLAYER_START_RADIUS, is_human=True)
-        opponents = []
+        ai_created_count = 0
         for name, count in ai_opponents.items():
-            if name in self.ai_models:
+            if name in self.ai_models and self.ai_models[name]:
                 for i in range(count):
                     color = {'aggressor': cfg.AI_AGGRESSOR_COLOR, 'farmer': cfg.AI_FARMER_COLOR, 'survivor': cfg.AI_SURVIVOR_COLOR}.get(name)
                     opponents.append(PlayerController(f"AI-{name.capitalize()}", color, cfg.CPU_START_RADIUS, ai_model=self.ai_models[name]))
-        for i in range(num_cpu):
+                   ai_created_count += 1
+        num_scripted_cpu = num_cpu - ai_created_count
+        for i in range(max(0, num_scripted_cpu)): # <-- THIS IS THE FIX
             opponents.append(PlayerController(f"CPU {i+1}", cfg.CPU_COLOR, cfg.CPU_START_RADIUS))
         self.all_controllers = [self.player] + opponents
 
@@ -516,7 +518,8 @@ class Game:
 
 
     def _unpack_action(self, continuous_action):
-        move_action = continuous_action[:2]; special_action_continuous = continuous_action[2]
+        action_data = continuous_action[0] 
+        move_action = action_data[:2]; special_action_continuous = action_data[2]
         if special_action_continuous < -0.33: special_action = 0
         elif special_action_continuous < 0.33: special_action = 1
         else: special_action = 2
@@ -631,10 +634,10 @@ class Game:
                 controller.frame_stack.append(screen)
                 obs = np.array([list(controller.frame_stack)], dtype=np.float32) # Ensure correct data type
                 input_name = controller.ai_model.get_inputs()[0].name
+                # In the update_game_state method...
                 outputs = controller.ai_model.run(None, {input_name: obs})
-                action_raw = outputs[0]
-                
-                unpacked_action = self._unpack_action(action_raw)
+                # The 'outputs' list itself contains the nested array. Pass it directly.
+                unpacked_action = self._unpack_action(outputs)
                 controller.update(self.all_controllers, self.mass_list, ai_action=unpacked_action)
             else: # Scripted CPU
                 controller.decide_cpu_state(self.all_controllers, self.food_list, self.virus_list)
