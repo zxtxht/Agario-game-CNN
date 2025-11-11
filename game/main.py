@@ -16,15 +16,14 @@ import cv2
 import asyncio  
 
 class Config:
-    # Game Constants
     SCREEN_WIDTH = 1600
     SCREEN_HEIGHT = 1200
-    BACKGROUND_COLOR = (10, 10, 10) # Darker background for the techie look
+    BACKGROUND_COLOR = (10, 10, 10) 
     FOOD_COLOR = (0, 255, 0)
-    PLAYER_COLOR = (0, 191, 255) # Deep sky blue for player
+    PLAYER_COLOR = (0, 191, 255) 
     CPU_COLOR = (255, 0, 0)
     FONT_COLOR = (224, 224, 224)
-    VIRUS_COLOR = (0, 255, 127) # Spring green for viruses
+    VIRUS_COLOR = (0, 255, 127) 
     MASS_COLOR = (200, 200, 200)
     NUM_FOOD = 850
     NUM_CPU = 14
@@ -49,11 +48,10 @@ class Config:
     DIRECTION_CHANGE_REWARD_SCALER = 0.015
     STAGNATION_PENALTY_SCALER = 0.005
     SHAPED_REWARD_ANNEAL_FRAMES = 1_000_000
-    # --- ADD THESE NEW LINES FOR AI OPPONENT COLORS ---
-    AI_AGGRESSOR_COLOR = (255, 128, 0)  # Orange
-    AI_FARMER_COLOR = (128, 0, 128)     # Purple
-    AI_SURVIVOR_COLOR = (0, 128, 255)    # Light Blue
-    # --- END OF ADDED LINES ---
+    AI_AGGRESSOR_COLOR = (255, 128, 0) 
+    AI_FARMER_COLOR = (128, 0, 128)    
+    AI_SURVIVOR_COLOR = (0, 128, 255)    
+   
 
 
 
@@ -64,7 +62,6 @@ class Config:
 
 cfg = Config()
 
-# --- In Block 2, REPLACE the SpatialHashGrid class with this ---
 class SpatialHashGrid:
     """
     A robust spatial hash grid for optimizing collision detection.
@@ -132,7 +129,7 @@ class SpatialHashGrid:
                         nearby_items_list.append(item_tuple)
         
         return nearby_items_list
-        # --- END OF THE FIX ---
+
 
 class Blob:
     def __init__(self, x, y, radius, color):
@@ -140,13 +137,8 @@ class Blob:
         self.dx, self.dy = 0, 0
         self.merge_timer = 0
     def draw(self, screen, name="", override_color=None):
-        # Use the override color if it's provided; otherwise, fall back to the blob's default color.
         draw_color = override_color if override_color is not None else self.color
-        
-        # This line now uses the determined draw_color
         pygame.draw.circle(screen, draw_color, (int(self.x), int(self.y)), int(self.radius))
-
-        # The text drawing logic remains the same
         if name:
             font = pygame.font.SysFont(None, int(self.radius / 1.5))
             text = font.render(name, True, cfg.FONT_COLOR)
@@ -186,8 +178,7 @@ class PlayerController:
         self.lead_blob = None
     @property
     def mass(self): return sum(b.radius**2 for b in self.blobs) if self.blobs else 0
-    # In the PlayerController class, REPLACE these two properties:
-
+   
     @property
     def center_x(self):
         # If the lead blob exists and is still part of our blobs, use its position.
@@ -206,7 +197,6 @@ class PlayerController:
     @property
     def total_radius(self):
         return math.sqrt(sum(b.radius**2 for b in self.blobs))
-    # In the PlayerController class:
 
     def respawn(self):
         self.blobs = [Blob(random.randint(0, cfg.SCREEN_WIDTH), random.randint(0, cfg.SCREEN_HEIGHT), self.start_radius, self.color)]
@@ -214,7 +204,6 @@ class PlayerController:
                         
 
 
-# In Block 2, REPLACE the entire `decide_cpu_state` method in the PlayerController class with this:
 
     def decide_cpu_state(self, all_controllers, food_list, virus_list):
         if not self.blobs: return
@@ -223,7 +212,6 @@ class PlayerController:
             self.state_timer -= 1
             return
             
-        # --- START: NEW DYNAMIC VISION LOGIC FOR CPU ---
         current_radius = self.total_radius
 
         if current_radius < 20:
@@ -233,15 +221,10 @@ class PlayerController:
         else:
             # Linear interpolation between (15, 8x) and (25, 5x)
             vision_multiplier = 5.5
-        
-        # The vision range is now the player's radius times the calculated multiplier
         dynamic_vision_range = current_radius * vision_multiplier
-        # --- END: NEW DYNAMIC VISION LOGIC FOR CPU ---
 
         self.target, self.flee_from = None, None
         all_other_blobs = [b for c in all_controllers if c is not self for b in c.blobs]
-    
-        # Use the new dynamic_vision_range instead of self.vision_range
         threats = [b for b in all_other_blobs if math.hypot(self.center_x - b.x, self.center_y - b.y) < dynamic_vision_range and b.radius > self.total_radius * 1.15]
         largest_blob_radius = max(b.radius for b in self.blobs) if self.blobs else 0
         prey = [b for b in all_other_blobs if math.hypot(self.center_x - b.x, self.center_y - b.y) < dynamic_vision_range and largest_blob_radius > b.radius * 1.15]
@@ -265,18 +248,15 @@ class PlayerController:
         if self.state != new_state:
             self.state = new_state
             self.state_timer = self.decision_cooldown
-
-    # This is the corrected update method for the PlayerController class
+            
     def update(self, all_controllers, mass_list, mouse_pos=None, ai_action=None):
         if not self.blobs: return
         target_pos = None
     
-        # --- Human Player Logic ---
         if self.is_human and mouse_pos:
             target_pos = mouse_pos
             self.target = Blob(target_pos[0], target_pos[1], 1, (0,0,0)) # Dummy target for aiming
     
-        # --- YOUR ORIGINAL AI LOGIC ---
         elif self.ai_model and ai_action is not None:
             move_action = ai_action['move']; special_action = ai_action['special']
             raw_target_x = self.center_x + move_action[0] * 500
@@ -287,7 +267,6 @@ class PlayerController:
             if special_action == 1 and random.random() < 0.60: self.shoot_mass(mass_list)
             if special_action == 2 and random.random() < 0.05: self.split()
     
-        # --- YOUR ORIGINAL SCRIPTED CPU LOGIC ---
         elif not self.is_human and not self.ai_model:
             if self.state == 'fleeing' and self.flee_from:
                 angle = math.atan2(self.center_y - self.flee_from.y, self.center_x - self.flee_from.x)
@@ -300,8 +279,7 @@ class PlayerController:
                 if self.wander_target is None or math.hypot(self.center_x - self.wander_target[0], self.center_y - self.wander_target[1]) < 50:
                     self.wander_target = (random.randint(50, cfg.SCREEN_WIDTH - 50), random.randint(50, cfg.SCREEN_HEIGHT - 50))
                 target_pos = self.wander_target
-    
-        # --- YOUR ORIGINAL UNIVERSAL MOVEMENT LOGIC (UNCHANGED) ---
+
         for blob in self.blobs:
             if target_pos:
                 angle = math.atan2(target_pos[1] - blob.y, target_pos[0] - blob.x)
@@ -315,11 +293,10 @@ class PlayerController:
             if blob.merge_timer > 0: blob.merge_timer -= 1
         self.merge_blobs()
     def merge_blobs(self):
-        # Part 1: Advanced Rejoin Physics (The "Pull")
         if len(self.blobs) > 1:
             center_x = self.center_x
             center_y = self.center_y
-            pull_strength = 0.18 # Adjusted to match original script
+            pull_strength = 0.18 
         
             for blob in self.blobs:
                 dist_x = center_x - blob.x
@@ -353,32 +330,28 @@ class PlayerController:
 # ADD THIS REPLACEMENT METHOD
     def split(self):
         """Splits all blobs that are large enough, creating them at an offset to prevent overlap."""
-        if len(self.blobs) >= 8: return # Limit the number of blobs
+        if len(self.blobs) >= 8: return 
     
-        # We must iterate over a copy [:] because we are modifying the list during the loop
+        
         for blob in self.blobs[:]:
-            if blob.radius > 14: # Minimum radius to be able to split
+            if blob.radius > 14: 
                 self.blobs.remove(blob)
                 new_radius = math.sqrt(blob.radius**2 / 2)
     
-                # 1. Determine the direction of the split.
-                # If the blob is stationary, split along a random angle.
+                
                 if blob.dx == 0 and blob.dy == 0:
                     base_angle = random.uniform(0, 2 * math.pi)
                 else:
                     base_angle = math.atan2(blob.dy, blob.dx)
-    
-                # 2. Create the two new blobs.
+
                 for i in range(2):
                     # The first blob goes forward (angle), the second goes backward (angle + 180 deg).
                     split_angle = base_angle + (i * math.pi)
     
-                    # 3. THIS IS THE FIX: Calculate an offset position for the new blob.
                     # It is placed just outside the original blob's radius.
                     offset_x = blob.x + (new_radius) * math.cos(split_angle)
                     offset_y = blob.y + (new_radius) * math.sin(split_angle)
     
-                    # 4. Create the new blob at the calculated OFFSET position, not at the center.
                     new_blob = Blob(offset_x, offset_y, new_radius, self.color)
     
                     # 5. Propel the new blob in the same direction as its offset.
@@ -478,14 +451,8 @@ class PlayerController:
                 return virus # This virus is blocking the path.
 
         return None # No blocking viruses found
-    # Helper function for weight initialization
 
 
-    # --- The AI Agent's Neural Network Architecture ---
-    # This class is needed for the environment to load AI opponents from saved models.
-   
-
-# --- ADD THIS NEW CNN EXTRACTOR CLASS ---
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
@@ -522,10 +489,6 @@ class CustomCnnExtractor(BaseFeaturesExtractor):
         return self.linear(self.cnn(observations))
 
 
-
-# =============================================================================
-# SECTION 5: THE FINAL GAME ENGINE
-# =============================================================================
 class Game:
     def __init__(self):
         pygame.init(); pygame.font.init()
@@ -581,7 +544,7 @@ class Game:
                 initial_screen = self._get_processed_screen(center_on_controller=controller)
                 for _ in range(controller.frame_stack.maxlen): controller.frame_stack.append(initial_screen)
 
-    # --- THIS IS YOUR ORIGINAL METHOD, UNCHANGED ---
+
     def _unpack_action(self, continuous_action):
         move_action = continuous_action[:2]; special_action_continuous = continuous_action[2]
         if special_action_continuous < -0.33: special_action = 0
@@ -589,7 +552,6 @@ class Game:
         else: special_action = 2
         return {"move": move_action, "special": special_action}
 
-    # --- THIS IS YOUR ORIGINAL METHOD, UNCHANGED ---
     def _handle_collisions(self):
         removed_food = set(); removed_mass = set(); removed_viruses = set()
         removed_blobs = {c: set() for c in self.all_controllers}
@@ -636,7 +598,6 @@ class Game:
                 controller.blobs = [b for b in controller.blobs if b not in blobs_to_remove]
                 if not controller.blobs: controller.respawn()
 
-    # --- THIS IS YOUR ORIGINAL METHOD, UNCHANGED ---
     def _get_processed_screen(self, center_on_controller):
         agent_radius = center_on_controller.total_radius if center_on_controller.blobs else cfg.PLAYER_START_RADIUS
         vision_multiplier = 6.0 if agent_radius < 20 else (4.0 if agent_radius > 20 else 5.0)
@@ -651,7 +612,6 @@ class Game:
         pil_resized = pil_image.resize((cfg.OBS_SIZE, cfg.OBS_SIZE), Image.Resampling.LANCZOS).convert('L')
         return np.array(pil_resized, dtype=np.uint8)
 
-    # --- MAIN GAME LOOP METHODS ---
     def update_game_state(self):
         mouse_pos = pygame.mouse.get_pos()
         for controller in self.all_controllers:
