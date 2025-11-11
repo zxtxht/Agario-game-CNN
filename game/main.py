@@ -697,7 +697,27 @@ class Game:
             self.clock.tick(60)
             await asyncio.sleep(0)
         pygame.quit()
+game = None 
 
+from pyodide.ffi import create_proxy
+
+@pyscript.ffi.export_to_js
+def reset_game_from_js(settings):
+    global game
+    if game:
+        print(f"Python received settings from JS: {settings.to_py()}")
+        js_settings = settings.to_py()
+        num_cpu = js_settings.get('cpu_opponents', 10)
+        num_food = js_settings.get('food', 850)
+        num_viruses = js_settings.get('viruses', 14)
+        ai_opponents = js_settings.get('ai_opponents', {})
+        game.reset_game(
+            num_cpu=num_cpu,
+            num_food=num_food,
+            num_viruses=num_viruses,
+            ai_opponents=ai_opponents
+        )
+        
 if __name__ == '__main__':
     game = Game()
     asyncio.run(game.main_loop())
