@@ -488,7 +488,7 @@ class CustomCnnExtractor(BaseFeaturesExtractor):
         # The output of the CNN is passed through the linear layer to get the final feature vector.
         return self.linear(self.cnn(observations))
 
-
+import onnxruntime_web as ort
 class Game:
     def __init__(self):
         pygame.init(); pygame.font.init()
@@ -497,6 +497,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.grid = SpatialHashGrid(cfg.SCREEN_WIDTH, cfg.SCREEN_HEIGHT, cell_size=200)
 
+        os.environ["PYGAME_ASYNC_EVENT"] = "0"
         self.ai_models = self._load_ai_models()
 
         self.player = None; self.all_controllers = []; self.food_list = []
@@ -509,11 +510,15 @@ class Game:
         model_paths = { "aggressor": "Phase1_Aggressor_SAC_sb3.zip", "farmer": "Phase1_Farmer_SAC_sb3.zip", "survivor": "Phase1_Survivor_SAC_sb3.zip" }
         print("--- Loading AI Models ---")
         for name, path in model_paths.items():
-            if os.path.exists(path):
+            try:
                 print(f"  > Loading '{name}' from {path}")
+                # This InferenceSession() is the FAST part
                 models[name] = ort.InferenceSession(path)
-            else:
-                print(f"  > WARNING: Model not found at {path}, skipping.")
+                print(f"  > Successfully loaded {name}.")
+            except Exception as e:
+                # This error often shows if the file wasn't fetched correctly in py-config
+                print(f"  > WARNING: Could not load ONNX model at {path}. Error: {e}")
+                print(f"  > CHECK YOUR <py-config> in index.html to ensure this file is fetched!")
         return models
 
     # --- THIS IS YOUR ORIGINAL LOGIC FROM AGARENV, MOVED HERE ---
@@ -620,8 +625,10 @@ class Game:
             elif controller.ai_model:
                 screen = self._get_processed_screen(center_on_controller=controller)
                 controller.frame_stack.append(screen)
-                obs = np.array(list(controller.frame_stack))
-                action_raw, _ = controller.ai_model.predict(obs, deterministic=True)
+                obs = np.array([list(controller.frame_stack)], dtype=np.float32) # Ensure correct data type
+                input_name = controller.ai_model.get_inputs()[0].name
+                outputs = controller.ai_model.run(None, {input_name: obs})
+                action_raw = outputs[0]
                 
                 unpacked_action = self._unpack_action(action_raw)
                 controller.update(self.all_controllers, self.mass_list, ai_action=unpacked_action)
