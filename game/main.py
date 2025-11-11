@@ -173,7 +173,7 @@ class Mass(Blob):
         self.decay_timer -= 1
 
 class PlayerController:
-    def __init__(self, name, color, start_radius, ai_model=None):
+    def __init__(self, name, color, start_radius, ai_model=None,is_human=False):
         self.name, self.color, self.start_radius = name, color, start_radius
         self.is_human = is_human
         self.ai_model = ai_model
