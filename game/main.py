@@ -472,7 +472,7 @@ class Game:
 
     def _load_ai_models(self):
         models = {}
-        model_paths = { "aggressor": "aggressor.onnx", "farmer": "farmer.onnx", "survivor": "survivor.onnx" }
+        model_paths = { "aggressor": "game/aggressor.onnx", "farmer": "game/farmer.onnx", "survivor": "game/survivor.onnx" }
         print("--- Loading AI Models ---")
         for name, path in model_paths.items():
             try:
