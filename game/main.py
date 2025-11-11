@@ -8,9 +8,9 @@ import math
 import os
 import time
 import numpy as np
+import onnxruntime_web as ort
 from collections import deque
 from PIL import Image
-import torch
 import torch.nn as nn
 import cv2
 import asyncio  
@@ -511,7 +511,7 @@ class Game:
         for name, path in model_paths.items():
             if os.path.exists(path):
                 print(f"  > Loading '{name}' from {path}")
-                models[name] = SAC.load(path, device='cpu')
+                models[name] = ort.InferenceSession(path)
             else:
                 print(f"  > WARNING: Model not found at {path}, skipping.")
         return models
@@ -622,6 +622,7 @@ class Game:
                 controller.frame_stack.append(screen)
                 obs = np.array(list(controller.frame_stack))
                 action_raw, _ = controller.ai_model.predict(obs, deterministic=True)
+                
                 unpacked_action = self._unpack_action(action_raw)
                 controller.update(self.all_controllers, self.mass_list, ai_action=unpacked_action)
             else: # Scripted CPU
