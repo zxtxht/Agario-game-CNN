@@ -24,9 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
         aiSurvivor.value = Math.floor(Math.random() * 6);
     });
 
-    // THIS IS THE FIX. THIS IS NO LONGER PLACEHOLDER BULLSHIT.
+
     resetGameBtn.addEventListener('click', () => {
-        // 1. Collect all the settings from the UI, just like before.
+
         const gameSettings = {
             cpu_opponents: parseInt(cpuOpponents.value, 10),
             ai_opponents: {
@@ -41,12 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('JavaScript is sending these settings to Python:', gameSettings);
 
         try {
-            // 2. Access the PyScript environment to find our exposed Python function.
-            // pyscript.ffi.PyProxy.get is how we grab a Python object by its name.
+           
             const resetGamePython = pyscript.ffi.PyProxy.get('reset_game_from_js');
-
-            // 3. Call the Python function and pass the JavaScript settings object to it.
-            // PyScript automatically handles the conversion.
             resetGamePython(gameSettings);
             
             console.log('Successfully called Python function.');
