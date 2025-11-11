@@ -4,14 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agar.io AI</title>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
     <link rel="stylesheet" href="style.css">
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="game-window">
-            <div id="pygame-app"></div>
+            <!-- This div is where PyScript will place the Pygame canvas -->
+            <div id="pygame-app">
+                 <!-- Loading Splash Screen -->
+                <div id="loading-overlay">
+                    <div class="loading-text">Loading Pygame & AI Models...</div>
+                    <div class="spinner"></div>
+                    <div class="loading-subtext">This may take a moment.</div>
+                </div>
+            </div>
         </div>
         <div class="controls">
+            <!-- Your controls are fine, no changes needed here -->
             <h1>Game Settings</h1>
             <div class="control-group">
                 <label for="cpu-opponents">CPU Opponents</label>
@@ -53,6 +64,32 @@
             <button id="reset-game">Reset Game</button>
         </div>
     </div>
+    
+    <!-- PyScript Configuration -->
+    <py-config>
+        # IMPORTANT: List all the Python libraries your game needs.
+        # Pygame-ce is the community edition that works well with Pyodide.
+        packages = [
+          "pygame-ce",
+          "numpy",
+          "torch", 
+          "pillow"
+        ]
+        # IMPORTANT: List all the local files your script needs to access.
+        # This includes your trained models. The path must be relative to index.html.
+        [[fetch]]
+        files = [
+          "./game/main.py",
+          "./game/Phase1_Aggressor_SAC_sb3.zip",
+          "./game/Phase1_Farmer_SAC_sb3.zip",
+          "./game/Phase1_Survivor_SAC_sb3.zip"
+        ]
+    </py-config>
+
+    <!-- This tag runs your Python script. -->
+    <py-script src="./game/main.py"></py-script>
+
+    <!-- Your existing script.js is fine. -->
     <script src="script.js"></script>
 </body>
 </html>
