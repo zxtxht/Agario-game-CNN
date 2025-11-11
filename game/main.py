@@ -2,16 +2,12 @@ import pygame
 import random
 import math
 import os
-import pygame
-import random
-import math
-import os
 import time
 import numpy as np
 import onnxruntime_web as ort
 from collections import deque
-import asyncio  
 from PIL import Image
+import asyncio  
 
 class Config:
     SCREEN_WIDTH = 1600
@@ -451,13 +447,11 @@ class PlayerController:
         return None # No blocking viruses found
 
 
-
-
-import onnxruntime_web as ort
 class Game:
     def __init__(self):
         pygame.init(); pygame.font.init()
-        self.screen = pygame.display.set_mode((800, 600))
+        # pygame-ce in PyScript will automatically create a canvas
+        self.screen = pygame.display.set_mode((cfg.SCREEN_WIDTH, cfg.SCREEN_HEIGHT))
         pygame.display.set_caption("Agar AI")
         self.clock = pygame.time.Clock()
         self.grid = SpatialHashGrid(cfg.SCREEN_WIDTH, cfg.SCREEN_HEIGHT, cell_size=200)
@@ -472,7 +466,7 @@ class Game:
 
     def _load_ai_models(self):
         models = {}
-        model_paths = { "aggressor": "game/aggressor.onnx", "farmer": "game/farmer.onnx", "survivor": "game/survivor.onnx" }
+        model_paths = { "aggressor": "aggressor.onnx", "farmer": "farmer.onnx", "survivor": "survivor.onnx" }
         print("--- Loading AI Models ---")
         for name, path in model_paths.items():
             try:
@@ -499,15 +493,13 @@ class Game:
             self.virus_list.append(Virus(random.randint(100, cfg.SCREEN_WIDTH-100), random.randint(100, cfg.SCREEN_HEIGHT-100)))
         
         self.player = PlayerController("Player", cfg.PLAYER_COLOR, cfg.PLAYER_START_RADIUS, is_human=True)
-        ai_created_count = 0
+        opponents = []
         for name, count in ai_opponents.items():
-            if name in self.ai_models and self.ai_models[name]:
+            if name in self.ai_models:
                 for i in range(count):
                     color = {'aggressor': cfg.AI_AGGRESSOR_COLOR, 'farmer': cfg.AI_FARMER_COLOR, 'survivor': cfg.AI_SURVIVOR_COLOR}.get(name)
                     opponents.append(PlayerController(f"AI-{name.capitalize()}", color, cfg.CPU_START_RADIUS, ai_model=self.ai_models[name]))
-                   ai_created_count += 1
-        num_scripted_cpu = num_cpu - ai_created_count
-        for i in range(max(0, num_scripted_cpu)): # <-- THIS IS THE FIX
+        for i in range(num_cpu):
             opponents.append(PlayerController(f"CPU {i+1}", cfg.CPU_COLOR, cfg.CPU_START_RADIUS))
         self.all_controllers = [self.player] + opponents
 
@@ -518,8 +510,7 @@ class Game:
 
 
     def _unpack_action(self, continuous_action):
-        action_data = continuous_action[0] 
-        move_action = action_data[:2]; special_action_continuous = action_data[2]
+        move_action = continuous_action[:2]; special_action_continuous = continuous_action[2]
         if special_action_continuous < -0.33: special_action = 0
         elif special_action_continuous < 0.33: special_action = 1
         else: special_action = 2
@@ -571,73 +562,37 @@ class Game:
                 controller.blobs = [b for b in controller.blobs if b not in blobs_to_remove]
                 if not controller.blobs: controller.respawn()
 
-    # REPLACE the entire _get_processed_screen method with this
     def _get_processed_screen(self, center_on_controller):
-        # Create a temporary surface to draw the AI's view
-        temp_surface = pygame.Surface((cfg.SCREEN_WIDTH, cfg.SCREEN_HEIGHT))
-        temp_surface.fill(cfg.BACKGROUND_COLOR)
-        
-        # Center camera on the AI agent
-        cam_x = center_on_controller.center_x if center_on_controller.blobs else cfg.SCREEN_WIDTH / 2
-        cam_y = center_on_controller.center_y if center_on_controller.blobs else cfg.SCREEN_HEIGHT / 2
-        
-        offset_x = temp_surface.get_width() / 2 - cam_x
-        offset_y = temp_surface.get_height() / 2 - cam_y
-    
-        all_blobs_to_draw = self.food_list + self.virus_list + self.mass_list + [b for c in self.all_controllers for b in c.blobs]
-        all_blobs_to_draw.sort(key=lambda b: b.radius)
-        
-        for blob in all_blobs_to_draw:
-            screen_x = blob.x + offset_x
-            screen_y = blob.y + offset_y
-            owner = next((c for c in self.all_controllers if blob in c.blobs), None)
-            draw_color = owner.color if owner else blob.color
-            pygame.draw.circle(temp_surface, draw_color, (int(screen_x), int(screen_y)), int(blob.radius))
-    
-        # Now, take a "photo" from the center of this rendered view
         agent_radius = center_on_controller.total_radius if center_on_controller.blobs else cfg.PLAYER_START_RADIUS
-        vision_multiplier = 6.0 if agent_radius < 20 else 4.0
+        vision_multiplier = 6.0 if agent_radius < 20 else (4.0 if agent_radius > 20 else 5.0)
         viewport_size = max(400, min(cfg.SCREEN_WIDTH, agent_radius * vision_multiplier * 2))
-        
-        local_view = pygame.Surface((viewport_size, viewport_size))
-        # Blit from the center of the temp_surface
-        source_rect = (
-            temp_surface.get_width() / 2 - viewport_size / 2,
-            temp_surface.get_height() / 2 - viewport_size / 2,
-            viewport_size,
-            viewport_size
-        )
-        local_view.blit(temp_surface, (0,0), source_rect)
-        
-        # Process the image for the neural network
-        pixels = pygame.image.tostring(local_view, "RGB")
-        img = Image.frombytes("RGB", (int(viewport_size), int(viewport_size)), pixels)
-        img_resized = img.resize((cfg.OBS_SIZE, cfg.OBS_SIZE), Image.Resampling.LANCZOS).convert('L')
-        return np.array(img_resized, dtype=np.uint8)
+        cam_x, cam_y = (center_on_controller.center_x, center_on_controller.center_y) if center_on_controller.blobs else (cfg.SCREEN_WIDTH / 2, cfg.SCREEN_HEIGHT / 2)
+        local_view_surface = pygame.Surface((viewport_size, viewport_size))
+        source_rect_x = cam_x - viewport_size / 2
+        source_rect_y = cam_y - viewport_size / 2
+        local_view_surface.blit(self.screen, (0, 0), (source_rect_x, source_rect_y, viewport_size, viewport_size))
+        viewport_pixels = pygame.image.tostring(local_view_surface, "RGB")
+        pil_image = Image.frombytes("RGB", (int(viewport_size), int(viewport_size)), viewport_pixels)
+        pil_resized = pil_image.resize((cfg.OBS_SIZE, cfg.OBS_SIZE), Image.Resampling.LANCZOS).convert('L')
+        return np.array(pil_resized, dtype=np.uint8)
 
     def update_game_state(self):
-        # Inside the update_game_state method...
         mouse_pos = pygame.mouse.get_pos()
-        # Get camera position (centered on player)
-        cam_x = self.player.center_x if self.player.blobs else cfg.SCREEN_WIDTH / 2
-        cam_y = self.player.center_y if self.player.blobs else cfg.SCREEN_HEIGHT / 2
-        
-        # Translate screen coordinates to world coordinates
-        world_mouse_x = cam_x + (mouse_pos[0] - self.screen.get_width() / 2)
-        world_mouse_y = cam_y + (mouse_pos[1] - self.screen.get_height() / 2)
-        
         for controller in self.all_controllers:
             if controller.is_human:
-                controller.update(self.all_controllers, self.mass_list, mouse_pos=(world_mouse_x, world_mouse_y))
+                controller.update(self.all_controllers, self.mass_list, mouse_pos=mouse_pos)
             elif controller.ai_model:
                 screen = self._get_processed_screen(center_on_controller=controller)
                 controller.frame_stack.append(screen)
-                obs = np.array([list(controller.frame_stack)], dtype=np.float32) # Ensure correct data type
+                # Stack frames: shape should be (1, 4, 84, 84) for CNN input
+                # Normalize to [0, 1] range
+                stacked_frames = np.array(list(controller.frame_stack), dtype=np.float32) / 255.0
+                obs = stacked_frames[np.newaxis, ...]  # Add batch dimension: (1, 4, 84, 84)
                 input_name = controller.ai_model.get_inputs()[0].name
-                # In the update_game_state method...
                 outputs = controller.ai_model.run(None, {input_name: obs})
-                # The 'outputs' list itself contains the nested array. Pass it directly.
-                unpacked_action = self._unpack_action(outputs)
+                action_raw = outputs[0]
+                
+                unpacked_action = self._unpack_action(action_raw)
                 controller.update(self.all_controllers, self.mass_list, ai_action=unpacked_action)
             else: # Scripted CPU
                 controller.decide_cpu_state(self.all_controllers, self.food_list, self.virus_list)
@@ -647,42 +602,15 @@ class Game:
             if m.decay_timer <= 0: self.mass_list.remove(m)
         self._handle_collisions()
 
-    # REPLACE the entire draw_elements method with this
     def draw_elements(self):
         self.screen.fill(cfg.BACKGROUND_COLOR)
-        
-        # Center camera on player
-        cam_x = self.player.center_x if self.player.blobs else cfg.SCREEN_WIDTH / 2
-        cam_y = self.player.center_y if self.player.blobs else cfg.SCREEN_HEIGHT / 2
-        
-        # Calculate offset
-        offset_x = self.screen.get_width() / 2 - cam_x
-        offset_y = self.screen.get_height() / 2 - cam_y
-    
-        # Sort ALL blobs by radius for correct draw order
-        all_blobs_to_draw = self.food_list + self.virus_list + self.mass_list + [b for c in self.all_controllers for b in c.blobs]
-        all_blobs_to_draw.sort(key=lambda b: b.radius)
-    
-        for blob in all_blobs_to_draw:
-            # Calculate screen position
-            screen_x = blob.x + offset_x
-            screen_y = blob.y + offset_y
-            
-            # Check if the blob is visible on screen before drawing
-            if screen_x + blob.radius > 0 and screen_x - blob.radius < self.screen.get_width() and \
-               screen_y + blob.radius > 0 and screen_y - blob.radius < self.screen.get_height():
-                
-                owner = next((c for c in self.all_controllers if blob in c.blobs), None)
-                name = owner.name if owner and len(owner.blobs) == 1 else ""
-                
-                # Draw the blob at its calculated screen position
-                draw_color = owner.color if owner else blob.color
-                pygame.draw.circle(self.screen, draw_color, (int(screen_x), int(screen_y)), int(blob.radius))
-                if name:
-                    font = pygame.font.SysFont(None, max(12, int(blob.radius / 1.5)))
-                    text = font.render(name, True, cfg.FONT_COLOR)
-                    self.screen.blit(text, text.get_rect(center=(int(screen_x), int(screen_y))))
-    
+        for f in self.food_list: f.draw(self.screen)
+        for v in self.virus_list: v.draw(self.screen)
+        for m in self.mass_list: m.draw(self.screen)
+        all_blobs_sorted = sorted([b for c in self.all_controllers for b in c.blobs], key=lambda b: b.radius)
+        for blob in all_blobs_sorted:
+            owner = next((c for c in self.all_controllers if blob in c.blobs), None)
+            if owner: blob.draw(self.screen, name=owner.name if len(owner.blobs) == 1 else "")
         pygame.display.flip()
 
     async def main_loop(self):
@@ -699,26 +627,66 @@ class Game:
             self.clock.tick(60)
             await asyncio.sleep(0)
         pygame.quit()
-game = None 
 
-from pyodide.ffi import create_proxy
+# Game initialization and PyScript setup
+game = None
+_game_loop_task = None
 
-@pyscript.ffi.export_to_js
-def reset_game_from_js(settings):
-    global game
-    if game:
-        print(f"Python received settings from JS: {settings.to_py()}")
-        js_settings = settings.to_py()
-        num_cpu = js_settings.get('cpu_opponents', 10)
-        num_food = js_settings.get('food', 850)
-        num_viruses = js_settings.get('viruses', 14)
-        ai_opponents = js_settings.get('ai_opponents', {})
-        game.reset_game(
-            num_cpu=num_cpu,
-            num_food=num_food,
-            num_viruses=num_viruses,
-            ai_opponents=ai_opponents
-        )
+async def init_game():
+    global game, _game_loop_task
+    if game is None:
+        print("Initializing game...")
+        try:
+            game = Game()
+            print("Game initialized!")
+            # Start the game loop
+            _game_loop_task = asyncio.create_task(game.main_loop())
+        except Exception as e:
+            print(f"Error initializing game: {e}")
+            import traceback
+            traceback.print_exc()
+
+# Auto-initialize when this module loads in PyScript
+try:
+    import pyscript
+    from pyodide.ffi import create_proxy
+    
+    @pyscript.ffi.export_to_js
+    def reset_game_from_js(settings):
+        global game
+        if game is None:
+            print("Game not initialized yet, initializing now...")
+            asyncio.ensure_future(init_game())
+            return
+        if game:
+            print(f"Python received settings from JS: {settings}")
+            # Handle both dict and JS object
+            if hasattr(settings, 'to_py'):
+                js_settings = settings.to_py()
+            else:
+                js_settings = settings
+            num_cpu = js_settings.get('cpu_opponents', 10)
+            num_food = js_settings.get('food', 850)
+            num_viruses = js_settings.get('viruses', 14)
+            ai_opponents = js_settings.get('ai_opponents', {})
+            game.reset_game(
+                num_cpu=num_cpu,
+                num_food=num_food,
+                num_viruses=num_viruses,
+                ai_opponents=ai_opponents
+            )
+    
+    # Wait a bit for PyScript to be fully ready, then initialize
+    import js
+    def start_game():
+        asyncio.ensure_future(init_game())
+    
+    # Use setTimeout to ensure DOM is ready
+    js.setTimeout(create_proxy(start_game), 100)
+    
+except ImportError:
+    # Not running in PyScript, use standard Python
+    pass
         
 if __name__ == '__main__':
     game = Game()
