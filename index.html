@@ -64,12 +64,10 @@
     
     <!-- PyScript Configuration -->
     <py-config>
-        # torch is GONE, onnxruntime-web is ADDED.
         packages = [
-          "pygame-ce",
+          "pygame",
           "numpy",
-          "pillow",
-          "onnxruntime-web"
+          "pillow"
         ]
         # We fetch the small .onnx files instead of the big .zip files
         [[fetch]]
