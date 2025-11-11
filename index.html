@@ -1,1 +1,58 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agar.io AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="game-window">
+            <div id="pygame-app"></div>
+        </div>
+        <div class="controls">
+            <h1>Game Settings</h1>
+            <div class="control-group">
+                <label for="cpu-opponents">CPU Opponents</label>
+                <select id="cpu-opponents">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="15">15</option>
+                    <option value="20">20</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>AI Opponents</label>
+                <div class="ai-opponents-selection">
+                    <div class="ai-opponent">
+                        <span>Aggressor</span>
+                        <input type="number" id="ai-aggressor" value="1" min="0" max="5">
+                    </div>
+                    <div class="ai-opponent">
+                        <span>Farmer</span>
+                        <input type="number" id="ai-farmer" value="1" min="0" max="5">
+                    </div>
+                    <div class="ai-opponent">
+                        <span>Survivor</span>
+                        <input type="number" id="ai-survivor" value="1" min="0" max="5">
+                    </div>
+                </div>
+                <button id="shuffle-ai">Shuffle AI</button>
+            </div>
+            <div class="control-group">
+                <label for="food-slider">Food</label>
+                <input type="range" id="food-slider" min="200" max="1500" value="850">
+                <span id="food-value">850</span>
+            </div>
+            <div class="control-group">
+                <label for="virus-slider">Viruses</label>
+                <input type="range" id="virus-slider" min="5" max="30" value="14">
+                <span id="virus-value">14</span>
+            </div>
+            <button id="reset-game">Reset Game</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
