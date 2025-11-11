@@ -10,10 +10,8 @@ import time
 import numpy as np
 import onnxruntime_web as ort
 from collections import deque
-from PIL import Image
-import torch.nn as nn
-import cv2
 import asyncio  
+from PIL import Image
 
 class Config:
     SCREEN_WIDTH = 1600
@@ -453,46 +451,13 @@ class PlayerController:
         return None # No blocking viruses found
 
 
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
 
-class CustomCnnExtractor(BaseFeaturesExtractor):
-    """
-    A standard CNN feature extractor for Stable-Baselines3.
-    """
-    def __init__(self, observation_space: spaces.Box, features_dim: int = 256):
-        super(CustomCnnExtractor, self).__init__(observation_space, features_dim)
-        n_input_channels = observation_space.shape[0]
-
-        self.cnn = nn.Sequential(
-            layer_init(nn.Conv2d(n_input_channels, 32, kernel_size=8, stride=4, padding=0)),
-            nn.ReLU(),
-            layer_init(nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0)),
-            nn.ReLU(),
-            layer_init(nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0)),
-            nn.ReLU(),
-            nn.Flatten(),
-        )
-
-        # Compute shape by doing one forward pass
-        with torch.no_grad():
-            dummy_input = torch.as_tensor(observation_space.sample()[None]).float()
-            flattened_size = self.cnn(dummy_input).shape[1]
-
-        # A linear layer to project the CNN features to the desired features_dim
-        self.linear = nn.Sequential(layer_init(nn.Linear(flattened_size, features_dim)), nn.ReLU())
-
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        # The output of the CNN is passed through the linear layer to get the final feature vector.
-        return self.linear(self.cnn(observations))
 
 import onnxruntime_web as ort
 class Game:
     def __init__(self):
         pygame.init(); pygame.font.init()
-        self.screen = pygame.display.set_mode((cfg.SCREEN_WIDTH, cfg.SCREEN_HEIGHT))
+        self.screen = pygame.display.set_mode((800, 600))
         pygame.display.set_caption("Agar AI")
         self.clock = pygame.time.Clock()
         self.grid = SpatialHashGrid(cfg.SCREEN_WIDTH, cfg.SCREEN_HEIGHT, cell_size=200)
@@ -507,7 +472,7 @@ class Game:
 
     def _load_ai_models(self):
         models = {}
-        model_paths = { "aggressor": "Phase1_Aggressor_SAC_sb3.zip", "farmer": "Phase1_Farmer_SAC_sb3.zip", "survivor": "Phase1_Survivor_SAC_sb3.zip" }
+        model_paths = { "aggressor": "aggressor.onnx", "farmer": "farmer.onnx", "survivor": "survivor.onnx" }
         print("--- Loading AI Models ---")
         for name, path in model_paths.items():
             try:
@@ -603,25 +568,64 @@ class Game:
                 controller.blobs = [b for b in controller.blobs if b not in blobs_to_remove]
                 if not controller.blobs: controller.respawn()
 
+    # REPLACE the entire _get_processed_screen method with this
     def _get_processed_screen(self, center_on_controller):
+        # Create a temporary surface to draw the AI's view
+        temp_surface = pygame.Surface((cfg.SCREEN_WIDTH, cfg.SCREEN_HEIGHT))
+        temp_surface.fill(cfg.BACKGROUND_COLOR)
+        
+        # Center camera on the AI agent
+        cam_x = center_on_controller.center_x if center_on_controller.blobs else cfg.SCREEN_WIDTH / 2
+        cam_y = center_on_controller.center_y if center_on_controller.blobs else cfg.SCREEN_HEIGHT / 2
+        
+        offset_x = temp_surface.get_width() / 2 - cam_x
+        offset_y = temp_surface.get_height() / 2 - cam_y
+    
+        all_blobs_to_draw = self.food_list + self.virus_list + self.mass_list + [b for c in self.all_controllers for b in c.blobs]
+        all_blobs_to_draw.sort(key=lambda b: b.radius)
+        
+        for blob in all_blobs_to_draw:
+            screen_x = blob.x + offset_x
+            screen_y = blob.y + offset_y
+            owner = next((c for c in self.all_controllers if blob in c.blobs), None)
+            draw_color = owner.color if owner else blob.color
+            pygame.draw.circle(temp_surface, draw_color, (int(screen_x), int(screen_y)), int(blob.radius))
+    
+        # Now, take a "photo" from the center of this rendered view
         agent_radius = center_on_controller.total_radius if center_on_controller.blobs else cfg.PLAYER_START_RADIUS
-        vision_multiplier = 6.0 if agent_radius < 20 else (4.0 if agent_radius > 20 else 5.0)
+        vision_multiplier = 6.0 if agent_radius < 20 else 4.0
         viewport_size = max(400, min(cfg.SCREEN_WIDTH, agent_radius * vision_multiplier * 2))
-        cam_x, cam_y = (center_on_controller.center_x, center_on_controller.center_y) if center_on_controller.blobs else (cfg.SCREEN_WIDTH / 2, cfg.SCREEN_HEIGHT / 2)
-        local_view_surface = pygame.Surface((viewport_size, viewport_size))
-        source_rect_x = cam_x - viewport_size / 2
-        source_rect_y = cam_y - viewport_size / 2
-        local_view_surface.blit(self.screen, (0, 0), (source_rect_x, source_rect_y, viewport_size, viewport_size))
-        viewport_pixels = pygame.image.tostring(local_view_surface, "RGB")
-        pil_image = Image.frombytes("RGB", (int(viewport_size), int(viewport_size)), viewport_pixels)
-        pil_resized = pil_image.resize((cfg.OBS_SIZE, cfg.OBS_SIZE), Image.Resampling.LANCZOS).convert('L')
-        return np.array(pil_resized, dtype=np.uint8)
+        
+        local_view = pygame.Surface((viewport_size, viewport_size))
+        # Blit from the center of the temp_surface
+        source_rect = (
+            temp_surface.get_width() / 2 - viewport_size / 2,
+            temp_surface.get_height() / 2 - viewport_size / 2,
+            viewport_size,
+            viewport_size
+        )
+        local_view.blit(temp_surface, (0,0), source_rect)
+        
+        # Process the image for the neural network
+        pixels = pygame.image.tostring(local_view, "RGB")
+        img = Image.frombytes("RGB", (int(viewport_size), int(viewport_size)), pixels)
+        img_resized = img.resize((cfg.OBS_SIZE, cfg.OBS_SIZE), Image.Resampling.LANCZOS).convert('L')
+        return np.array(img_resized, dtype=np.uint8)
 
     def update_game_state(self):
+        # Inside the update_game_state method...
         mouse_pos = pygame.mouse.get_pos()
+        # Get camera position (centered on player)
+        cam_x = self.player.center_x if self.player.blobs else cfg.SCREEN_WIDTH / 2
+        cam_y = self.player.center_y if self.player.blobs else cfg.SCREEN_HEIGHT / 2
+        
+        # Translate screen coordinates to world coordinates
+        world_mouse_x = cam_x + (mouse_pos[0] - self.screen.get_width() / 2)
+        world_mouse_y = cam_y + (mouse_pos[1] - self.screen.get_height() / 2)
+        
         for controller in self.all_controllers:
             if controller.is_human:
-                controller.update(self.all_controllers, self.mass_list, mouse_pos=mouse_pos)
+                controller.update(self.all_controllers, self.mass_list, mouse_pos=(world_mouse_x, world_mouse_y))
             elif controller.ai_model:
                 screen = self._get_processed_screen(center_on_controller=controller)
                 controller.frame_stack.append(screen)
@@ -640,15 +644,42 @@ class Game:
             if m.decay_timer <= 0: self.mass_list.remove(m)
         self._handle_collisions()
 
+    # REPLACE the entire draw_elements method with this
     def draw_elements(self):
         self.screen.fill(cfg.BACKGROUND_COLOR)
-        for f in self.food_list: f.draw(self.screen)
-        for v in self.virus_list: v.draw(self.screen)
-        for m in self.mass_list: m.draw(self.screen)
-        all_blobs_sorted = sorted([b for c in self.all_controllers for b in c.blobs], key=lambda b: b.radius)
-        for blob in all_blobs_sorted:
-            owner = next((c for c in self.all_controllers if blob in c.blobs), None)
-            if owner: blob.draw(self.screen, name=owner.name if len(owner.blobs) == 1 else "")
+        
+        # Center camera on player
+        cam_x = self.player.center_x if self.player.blobs else cfg.SCREEN_WIDTH / 2
+        cam_y = self.player.center_y if self.player.blobs else cfg.SCREEN_HEIGHT / 2
+        
+        # Calculate offset
+        offset_x = self.screen.get_width() / 2 - cam_x
+        offset_y = self.screen.get_height() / 2 - cam_y
+    
+        # Sort ALL blobs by radius for correct draw order
+        all_blobs_to_draw = self.food_list + self.virus_list + self.mass_list + [b for c in self.all_controllers for b in c.blobs]
+        all_blobs_to_draw.sort(key=lambda b: b.radius)
+    
+        for blob in all_blobs_to_draw:
+            # Calculate screen position
+            screen_x = blob.x + offset_x
+            screen_y = blob.y + offset_y
+            
+            # Check if the blob is visible on screen before drawing
+            if screen_x + blob.radius > 0 and screen_x - blob.radius < self.screen.get_width() and \
+               screen_y + blob.radius > 0 and screen_y - blob.radius < self.screen.get_height():
+                
+                owner = next((c for c in self.all_controllers if blob in c.blobs), None)
+                name = owner.name if owner and len(owner.blobs) == 1 else ""
+                
+                # Draw the blob at its calculated screen position
+                draw_color = owner.color if owner else blob.color
+                pygame.draw.circle(self.screen, draw_color, (int(screen_x), int(screen_y)), int(blob.radius))
+                if name:
+                    font = pygame.font.SysFont(None, max(12, int(blob.radius / 1.5)))
+                    text = font.render(name, True, cfg.FONT_COLOR)
+                    self.screen.blit(text, text.get_rect(center=(int(screen_x), int(screen_y))))
+    
         pygame.display.flip()
 
     async def main_loop(self):
