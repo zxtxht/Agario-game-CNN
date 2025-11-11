@@ -11,18 +11,15 @@
 <body>
     <div class="container">
         <div class="game-window">
-            <!-- This div is where PyScript will place the Pygame canvas -->
             <div id="pygame-app">
-                 <!-- Loading Splash Screen -->
                 <div id="loading-overlay">
-                    <div class="loading-text">Loading Pygame & AI Models...</div>
+                    <div class="loading-text">....................</div>
                     <div class="spinner"></div>
                     <div class="loading-subtext">This may take a moment.</div>
                 </div>
             </div>
         </div>
         <div class="controls">
-            <!-- Your controls are fine, no changes needed here -->
             <h1>Game Settings</h1>
             <div class="control-group">
                 <label for="cpu-opponents">CPU Opponents</label>
@@ -67,16 +64,12 @@
     
     <!-- PyScript Configuration -->
     <py-config>
-        # IMPORTANT: List all the Python libraries your game needs.
-        # Pygame-ce is the community edition that works well with Pyodide.
         packages = [
           "pygame-ce",
           "numpy",
           "torch", 
           "pillow"
         ]
-        # IMPORTANT: List all the local files your script needs to access.
-        # This includes your trained models. The path must be relative to index.html.
         [[fetch]]
         files = [
           "./game/main.py",
