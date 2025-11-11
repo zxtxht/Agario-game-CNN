@@ -4,10 +4,20 @@ import math
 import os
 import time
 import numpy as np
-import onnxruntime_web as ort
 from collections import deque
 from PIL import Image
-import asyncio  
+import asyncio
+
+# Try to import onnxruntime - will work if available
+try:
+    import onnxruntime as ort
+except ImportError:
+    try:
+        # Try alternative import name
+        import onnxruntime_web as ort
+    except ImportError:
+        print("WARNING: onnxruntime not available. AI models will not work.")
+        ort = None  
 
 class Config:
     SCREEN_WIDTH = 1600
@@ -466,6 +476,10 @@ class Game:
 
     def _load_ai_models(self):
         models = {}
+        if ort is None:
+            print("--- WARNING: onnxruntime not available. AI models disabled. ---")
+            return models
+        
         model_paths = { "aggressor": "aggressor.onnx", "farmer": "farmer.onnx", "survivor": "survivor.onnx" }
         print("--- Loading AI Models ---")
         for name, path in model_paths.items():
@@ -494,11 +508,14 @@ class Game:
         
         self.player = PlayerController("Player", cfg.PLAYER_COLOR, cfg.PLAYER_START_RADIUS, is_human=True)
         opponents = []
-        for name, count in ai_opponents.items():
-            if name in self.ai_models:
-                for i in range(count):
-                    color = {'aggressor': cfg.AI_AGGRESSOR_COLOR, 'farmer': cfg.AI_FARMER_COLOR, 'survivor': cfg.AI_SURVIVOR_COLOR}.get(name)
-                    opponents.append(PlayerController(f"AI-{name.capitalize()}", color, cfg.CPU_START_RADIUS, ai_model=self.ai_models[name]))
+        # Only create AI opponents if models are available
+        if self.ai_models:
+            for name, count in ai_opponents.items():
+                if name in self.ai_models:
+                    for i in range(count):
+                        color = {'aggressor': cfg.AI_AGGRESSOR_COLOR, 'farmer': cfg.AI_FARMER_COLOR, 'survivor': cfg.AI_SURVIVOR_COLOR}.get(name)
+                        opponents.append(PlayerController(f"AI-{name.capitalize()}", color, cfg.CPU_START_RADIUS, ai_model=self.ai_models[name]))
+        # Add regular CPU opponents
         for i in range(num_cpu):
             opponents.append(PlayerController(f"CPU {i+1}", cfg.CPU_COLOR, cfg.CPU_START_RADIUS))
         self.all_controllers = [self.player] + opponents
