@@ -41,12 +41,22 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('JavaScript is sending these settings to Python:', gameSettings);
 
         try {
-           
-            const resetGamePython = pyscript.ffi.PyProxy.get('reset_game_from_js');
-            resetGamePython(gameSettings);
-            
-            console.log('Successfully called Python function.');
-
+            // PyScript exports functions to the global scope
+            if (typeof reset_game_from_js !== 'undefined') {
+                reset_game_from_js(gameSettings);
+                console.log('Successfully called Python function.');
+            } else {
+                // Wait a bit and try again if PyScript is still loading
+                setTimeout(() => {
+                    if (typeof reset_game_from_js !== 'undefined') {
+                        reset_game_from_js(gameSettings);
+                        console.log('Successfully called Python function (delayed).');
+                    } else {
+                        console.error('Python function reset_game_from_js not found. Is PyScript loaded?');
+                        alert('Error: Could not communicate with the Pygame script. Make sure PyScript is fully loaded.');
+                    }
+                }, 500);
+            }
         } catch (error) {
             console.error('Failed to call Python function from JavaScript:', error);
             alert('Error: Could not communicate with the Pygame script. Make sure PyScript is fully loaded.');
